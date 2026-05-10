@@ -1,11 +1,152 @@
 <!doctype html>
-<html lang="en">
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WebRTC</title>
+    <title>WebRTC Manual Handshake</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 20px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      textarea {
+        width: 100%;
+        height: 100px;
+        font-family: monospace;
+        font-size: 10px;
+      }
+      .box {
+        border: 1px solid #ccc;
+        padding: 15px;
+        border-radius: 8px;
+      }
+      #chat {
+        height: 200px;
+        border: 1px solid #eee;
+        overflow-y: auto;
+        margin-bottom: 10px;
+        background: #f9f9f9;
+        padding: 10px;
+      }
+    </style>
   </head>
   <body>
-    WebRTC
+    <div class="box">
+      <h3>1. Setup Connection</h3>
+      <button id="createOffer">Step A: Create Offer</button>
+      <p>Copy this and send to Peer B:</p>
+      <textarea id="localSdp" readonly></textarea>
+
+      <p>Paste Answer from Peer B here:</p>
+      <textarea
+        id="remoteSdp"
+        placeholder="Paste Answer SDP here..."
+      ></textarea>
+      <button id="acceptAnswer">Step C: Accept Answer</button>
+    </div>
+
+    <div class="box">
+      <h3>2. Peer B Reception</h3>
+      <p>Paste Offer from Peer A here:</p>
+      <textarea
+        id="offerInput"
+        placeholder="Paste Offer SDP here..."
+      ></textarea>
+      <button id="createAnswer">Step B: Create Answer</button>
+      <p>Copy this and send back to Peer A:</p>
+      <textarea id="answerOutput" readonly></textarea>
+    </div>
+
+    <div class="box" style="grid-column: span 2">
+      <h3>3. P2P Chat</h3>
+      <div id="status">Status: Disconnected</div>
+      <div id="chat"></div>
+      <input
+        type="text"
+        id="msgInput"
+        placeholder="Type a message..."
+        disabled
+      />
+      <button id="sendBtn" disabled>Send</button>
+    </div>
+
+    <script>
+      let pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      });
+      let dataChannel;
+
+      const localSdp = document.getElementById("localSdp");
+      const remoteSdp = document.getElementById("remoteSdp");
+      const offerInput = document.getElementById("offerInput");
+      const answerOutput = document.getElementById("answerOutput");
+      const chat = document.getElementById("chat");
+      const status = document.getElementById("status");
+
+      // --- PEER A LOGIC ---
+      document.getElementById("createOffer").onclick = async () => {
+        dataChannel = pc.createDataChannel("chat");
+        setupDataChannel(dataChannel);
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        // Wait for ICE candidates to gather before showing the SDP
+        pc.onicecandidate = (e) => {
+          if (!e.candidate)
+            localSdp.value = JSON.stringify(pc.localDescription);
+        };
+      };
+
+      document.getElementById("acceptAnswer").onclick = async () => {
+        const answer = JSON.parse(remoteSdp.value);
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      };
+
+      // --- PEER B LOGIC ---
+      document.getElementById("createAnswer").onclick = async () => {
+        pc.ondatachannel = (event) => {
+          dataChannel = event.channel;
+          setupDataChannel(dataChannel);
+        };
+
+        const offer = JSON.parse(offerInput.value);
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        pc.onicecandidate = (e) => {
+          if (!e.candidate)
+            answerOutput.value = JSON.stringify(pc.localDescription);
+        };
+      };
+
+      // --- DATA CHANNEL LOGIC ---
+      function setupDataChannel(channel) {
+        channel.onopen = () => {
+          status.textContent = "Status: CONNECTED!";
+          document.getElementById("msgInput").disabled = false;
+          document.getElementById("sendBtn").disabled = false;
+        };
+        channel.onmessage = (e) => {
+          appendMessage("Peer: " + e.data);
+        };
+      }
+
+      function appendMessage(msg) {
+        const div = document.createElement("div");
+        div.textContent = msg;
+        chat.appendChild(div);
+      }
+
+      document.getElementById("sendBtn").onclick = () => {
+        const msg = document.getElementById("msgInput").value;
+        dataChannel.send(msg);
+        appendMessage("You: " + msg);
+        document.getElementById("msgInput").value = "";
+      };
+    </script>
   </body>
 </html>
