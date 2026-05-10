@@ -57,7 +57,6 @@ We utilize the PeerJS cloud to handle the "Signaling" phase. The WebSocket is us
 
 Because WebRTC connections are anonymous by default, we implemented a custom identity layer:
 
-- **Persistence**: Your chosen name is saved to `localStorage`, so it persists across page reloads.
 - **P2P Names**: Upon connection, peers exchange a `{ type: 'identity', name: '...' }` packet to map random Peer IDs to human-readable nicknames.
 
 ### 3. Mesh Networking
